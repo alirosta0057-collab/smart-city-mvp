@@ -6,8 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://smartcity:smartcity@localhost:5432/smartcity"
-    redis_url: str = "redis://localhost:6379/0"
+    # Default to an on-disk SQLite DB so the backend can run standalone on
+    # hosts without a managed Postgres (Fly.io volumes, local quickstart, CI).
+    # In docker-compose this is overridden to Postgres via the env var.
+    database_url: str = "sqlite:///./data/smartcity.db"
+    # Redis is optional — the WebSocket chat hub is in-process, so an empty
+    # URL disables the Redis client entirely (single-instance deployments
+    # don't need pub/sub).
+    redis_url: str = ""
 
     jwt_secret: str = "dev-secret-change-me"
     jwt_algorithm: str = "HS256"
@@ -15,11 +21,16 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000"
 
-    # LLM (optional)
+    # LLM (optional). Supported providers: "" (rule-based only), "openai",
+    # "groq". Both are OpenAI-compatible and share the same chat-completions
+    # API surface; only base URL + key + model differ. Anthropic is not wired
+    # up yet.
     llm_provider: str = ""
-    openai_api_key: str = ""
-    anthropic_api_key: str = ""
     llm_model: str = ""
+    llm_base_url: str = ""
+    llm_timeout_seconds: float = 15.0
+    openai_api_key: str = ""
+    groq_api_key: str = ""
 
     # GeoIP
     geoip_provider: str = "ip-api"

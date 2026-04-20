@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.core.security import create_access_token, hash_password, verify_password
 from app.deps import CurrentUser, DbSession
 from app.models.user import User
-from app.schemas.user import Token, UserCreate, UserLogin, UserOut
+from app.schemas.user import LocationUpdate, Token, UserCreate, UserLogin, UserOut
 from app.services.geo import extract_client_ip, locate_by_ip
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -59,10 +59,31 @@ def me(user: CurrentUser) -> UserOut:
 
 
 @router.post("/locate", response_model=UserOut)
-async def locate_me(request: Request, user: CurrentUser, db: DbSession) -> UserOut:
-    ip = extract_client_ip(dict(request.headers), request.client.host if request.client else "")
-    loc = await locate_by_ip(ip)
-    user.lat, user.lng, user.city, user.country = loc.lat, loc.lng, loc.city, loc.country
+async def locate_me(
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+    payload: LocationUpdate | None = None,
+) -> UserOut:
+    """Accept explicit browser coordinates, or fall back to IP lookup."""
+    if payload is not None:
+        user.lat = payload.lat
+        user.lng = payload.lng
+        if payload.city is not None:
+            user.city = payload.city
+        if payload.country is not None:
+            user.country = payload.country
+    else:
+        ip = extract_client_ip(
+            dict(request.headers), request.client.host if request.client else ""
+        )
+        loc = await locate_by_ip(ip)
+        user.lat, user.lng, user.city, user.country = (
+            loc.lat,
+            loc.lng,
+            loc.city,
+            loc.country,
+        )
     db.commit()
     db.refresh(user)
     return UserOut.model_validate(user)

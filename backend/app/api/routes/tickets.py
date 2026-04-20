@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -240,8 +241,17 @@ async def claim_ticket(ticket_id: int, user: CurrentUser, db: DbSession) -> Tick
     return _to_out(ticket)
 
 
+class ResolvePayload(BaseModel):
+    note: str | None = Field(default=None, max_length=1000)
+
+
 @router.post("/{ticket_id}/resolve", response_model=TicketOut)
-async def resolve_ticket(ticket_id: int, user: CurrentUser, db: DbSession) -> TicketOut:
+async def resolve_ticket(
+    ticket_id: int,
+    user: CurrentUser,
+    db: DbSession,
+    payload: ResolvePayload | None = None,
+) -> TicketOut:
     ticket = db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -249,6 +259,23 @@ async def resolve_ticket(ticket_id: int, user: CurrentUser, db: DbSession) -> Ti
     ticket.status = TicketStatus.RESOLVED
     db.commit()
     db.refresh(ticket)
+    note = (payload.note if payload and payload.note else "").strip()
+    if note:
+        await _post_message(
+            db,
+            ticket,
+            SenderKind.SYSTEM,
+            "System",
+            f"Resolved by {user.full_name}: {note}",
+        )
+    else:
+        await _post_message(
+            db,
+            ticket,
+            SenderKind.SYSTEM,
+            "System",
+            f"Ticket resolved by {user.full_name}.",
+        )
     await hub.broadcast(
         ticket.id, {"type": "status", "ticket_status": ticket.status.value}
     )

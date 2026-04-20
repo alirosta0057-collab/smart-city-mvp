@@ -1,7 +1,19 @@
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// When NEXT_PUBLIC_API_URL is empty, the frontend is served by the same
+// origin as the API (single-container Fly deploy) and we use relative paths.
+// For split deployments set NEXT_PUBLIC_API_URL to the backend's absolute URL.
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-export const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+function defaultWsUrl(): string {
+  if (typeof window === "undefined") return "";
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}`;
+}
+
+export function wsBase(): string {
+  const configured = process.env.NEXT_PUBLIC_WS_URL;
+  if (configured) return configured;
+  return defaultWsUrl();
+}
 
 export type UserRole = "admin" | "citizen" | "agent";
 
@@ -35,6 +47,25 @@ export interface Business {
   lat: number;
   lng: number;
   category: Category;
+  distance_km: number;
+}
+
+export interface NearbyPlaceCategory {
+  slug: string;
+  name: string;
+  icon: string;
+}
+
+export interface NearbyPlace {
+  id: string;
+  name: string;
+  description: string | null;
+  phone: string | null;
+  address: string | null;
+  website: string | null;
+  lat: number;
+  lng: number;
+  category: NearbyPlaceCategory;
   distance_km: number;
 }
 
@@ -118,5 +149,5 @@ export const api = {
 export function wsUrl(path: string): string {
   const token = getToken() ?? "";
   const sep = path.includes("?") ? "&" : "?";
-  return `${WS_URL}${path}${sep}token=${encodeURIComponent(token)}`;
+  return `${wsBase()}${path}${sep}token=${encodeURIComponent(token)}`;
 }

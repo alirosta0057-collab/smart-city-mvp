@@ -11,9 +11,11 @@ venv/
 # Node
 node_modules/
 .next/
-out/
+/frontend/out/
 dist/
 .pnpm-store/
+# Runtime SQLite DB (Fly.io volume mount)
+backend/data/
 
 # Env
 .env
