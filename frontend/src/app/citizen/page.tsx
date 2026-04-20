@@ -120,11 +120,14 @@ export default function CitizenHome() {
   }, [ready, loadBusinesses]);
 
   useEffect(() => {
-    // Auto-detect location on first visit if user has no stored lat/lng
+    // Re-resolve location on every dashboard mount so the map reflects the
+    // user's current physical location, not a stale value carried over from
+    // a previous login (including, in demos, a different person using the
+    // same shared account). If browser geolocation is allowed, Chrome caches
+    // the permission so this is silent after first grant; otherwise we fall
+    // through to IP lookup.
     if (!ready || !user) return;
-    if (user.lat == null || user.lng == null) {
-      void detectLocation(true);
-    }
+    void detectLocation(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, user?.id]);
 
