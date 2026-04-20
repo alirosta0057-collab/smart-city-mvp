@@ -59,6 +59,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = React.useState<Locale>("en");
   const [resolved, setResolved] = React.useState<"light" | "dark">("light");
 
+  // Refs track the live theme/locale so async callbacks (e.g. the IP-based
+  // locale auto-detect, or the system dark-mode media listener) don't act on
+  // stale closure-captured values and revert a user's in-flight toggle.
+  const themeRef = React.useRef<Theme>("light");
+  const localeRef = React.useRef<Locale>("en");
+
   React.useEffect(() => {
     const t =
       (typeof window !== "undefined" &&
@@ -70,6 +76,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const initialLocale: Locale = stored ?? "en";
     setThemeState(t);
     setLocaleState(initialLocale);
+    themeRef.current = t;
+    localeRef.current = initialLocale;
     applyTheme(t, initialLocale);
     setResolved(t === "system" ? readSystem() : t);
 
@@ -88,8 +96,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           if (detected === "en") return;
           if (hasManualLocale()) return;
           setLocaleState(detected);
+          localeRef.current = detected;
           window.localStorage.setItem("sc_locale", detected);
-          applyTheme(t, detected);
+          // Use the live theme from the ref so a concurrent theme toggle
+          // isn't clobbered by a stale mount-time value.
+          applyTheme(themeRef.current, detected);
         })
         .catch(() => {
           /* IP detection best-effort; ignore failures. */
@@ -98,36 +109,40 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
-      if (theme === "system") {
-        applyTheme("system", initialLocale);
+      // Only the "system" theme follows OS dark-mode changes, and we must
+      // read the CURRENT theme/locale from refs so we don't overwrite an
+      // explicit user selection that happened after mount.
+      if (themeRef.current === "system") {
+        applyTheme("system", localeRef.current);
         setResolved(readSystem());
       }
     };
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setTheme = React.useCallback(
     (t: Theme) => {
       setThemeState(t);
+      themeRef.current = t;
       window.localStorage.setItem("sc_theme", t);
-      applyTheme(t, locale);
+      applyTheme(t, localeRef.current);
       setResolved(t === "system" ? readSystem() : t);
     },
-    [locale],
+    [],
   );
 
   const setLocale = React.useCallback(
     (l: Locale) => {
       setLocaleState(l);
+      localeRef.current = l;
       window.localStorage.setItem("sc_locale", l);
       // Record that the user hand-picked a locale so the country-based
       // auto-detect on the next page load respects their choice.
       window.localStorage.setItem("sc_locale_manual", "1");
-      applyTheme(theme, l);
+      applyTheme(themeRef.current, l);
     },
-    [theme],
+    [],
   );
 
   const value = React.useMemo<ThemeContextValue>(
