@@ -15,16 +15,16 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000"
 
-    # LLM (optional). Supported providers: "" (rule-based only), "openai", "groq",
-    # "anthropic". The OpenAI-compatible providers (openai, groq) share the same
-    # chat-completions API surface; only base URL + key + model differ.
+    # LLM (optional). Supported providers: "" (rule-based only), "openai",
+    # "groq". Both are OpenAI-compatible and share the same chat-completions
+    # API surface; only base URL + key + model differ. Anthropic is not wired
+    # up yet.
     llm_provider: str = ""
     llm_model: str = ""
     llm_base_url: str = ""
     llm_timeout_seconds: float = 15.0
     openai_api_key: str = ""
     groq_api_key: str = ""
-    anthropic_api_key: str = ""
 
     # GeoIP
     geoip_provider: str = "ip-api"
