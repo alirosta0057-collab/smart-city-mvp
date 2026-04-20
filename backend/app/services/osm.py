@@ -5,6 +5,12 @@ police stations, schools, etc.) within a radius of a given point, maps each
 OSM feature to one of our internal category slugs, and caches the result in
 process memory so we don't hammer the public Overpass endpoint.
 
+Queries use `nwr` (nodes + ways + relations) so polygon-mapped POIs such as
+hospitals, universities, and parks are returned with centroid geometry,
+not just point-mapped nodes. When a single `category_slug` is provided we
+issue a narrowed query for just that category so the 300-element cap is not
+burned on restaurants when the user is looking for pharmacies.
+
 No API key is required — Overpass and OpenStreetMap are free to use with
 sensible rate limits. We round coordinates to ~1km blocks before caching so
 nearby users share the same cache key.
@@ -27,6 +33,10 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 # Overpass explicitly asks clients to cache aggressively.
 _CACHE_TTL_SECONDS = 600
 
+# Max elements requested per Overpass query. High enough to cover a dense
+# European city centre with a single-category filter; still polite.
+_OUT_LIMIT = 300
+
 
 @dataclass(frozen=True)
 class OsmPlace:
@@ -42,14 +52,63 @@ class OsmPlace:
     website: str | None
 
 
-# In-process cache: { (round_lat, round_lng, radius_m): (expires_at, places) }
-_cache: dict[tuple[float, float, int], tuple[float, list[OsmPlace]]] = {}
+# In-process cache: { (round_lat, round_lng, radius_m, category_slug|""): (expires_at, places) }
+_cache: dict[tuple[float, float, int, str], tuple[float, list[OsmPlace]]] = {}
 _cache_lock = asyncio.Lock()
 
 
-# Mapping table: ordered so the first match wins when a node has multiple
-# tags (e.g. a pharmacy inside a shop). Each entry is
-# (tag_key, matching_values, slug, name, icon).
+# Category → Overpass selector templates. Each template is a plain Overpass
+# filter string that will be wrapped in `nwr[...](around:R,lat,lng);`.
+# A POI is surfaced as belonging to the first category whose selector matches.
+_CATEGORY_SELECTORS: dict[str, list[str]] = {
+    "safety": [
+        '["amenity"~"^(police|fire_station)$"]',
+    ],
+    "health": [
+        '["amenity"~"^(hospital|clinic|doctors|dentist|pharmacy)$"]',
+        '["healthcare"]',
+        '["shop"="chemist"]',
+    ],
+    "food": [
+        '["amenity"~"^(restaurant|cafe|fast_food|bar|pub|biergarten|food_court|ice_cream)$"]',
+        '["shop"~"^(supermarket|convenience|bakery|butcher|greengrocer|seafood|deli|marketplace)$"]',
+    ],
+    "finance": [
+        '["amenity"~"^(bank|atm|bureau_de_change)$"]',
+    ],
+    "transport": [
+        '["amenity"~"^(taxi|bus_station|fuel|charging_station|car_rental|parking|bicycle_rental)$"]',
+        '["public_transport"="station"]',
+        '["railway"~"^(station|subway_entrance|tram_stop)$"]',
+        '["highway"="bus_stop"]',
+    ],
+    "education": [
+        '["amenity"~"^(school|college|university|library|kindergarten)$"]',
+    ],
+    "municipal": [
+        '["amenity"~"^(townhall|courthouse|post_office)$"]',
+        '["office"~"^(government|notary)$"]',
+    ],
+    "leisure": [
+        '["amenity"~"^(cinema|theatre|nightclub|arts_centre|community_centre)$"]',
+        '["leisure"~"^(park|fitness_centre|sports_centre|playground|stadium|swimming_pool)$"]',
+        '["tourism"~"^(museum|gallery|attraction|viewpoint|zoo)$"]',
+    ],
+    "home": [
+        '["shop"~"^(hardware|doityourself|electrical|furniture|appliance|garden_centre)$"]',
+        '["craft"~"^(plumber|electrician|carpenter|painter|locksmith)$"]',
+    ],
+    "utilities": [
+        '["office"~"^(telecommunication|energy_supplier|water_supplier)$"]',
+        '["amenity"~"^(recycling|waste_disposal)$"]',
+        '["man_made"~"^(water_works|wastewater_plant)$"]',
+        '["power"="substation"]',
+    ],
+}
+
+
+# Ordered tag rules used to classify an element we got back from Overpass into
+# exactly one of our slugs. Order matters: the first match wins.
 _TAG_RULES: list[tuple[str, set[str], str, str, str]] = [
     # Safety / emergency first — most important for SOS context
     ("amenity", {"police"}, "safety", "Police", "👮"),
@@ -57,6 +116,7 @@ _TAG_RULES: list[tuple[str, set[str], str, str, str]] = [
     ("amenity", {"hospital"}, "health", "Hospital", "🏥"),
     ("amenity", {"clinic", "doctors", "dentist"}, "health", "Clinic", "⚕️"),
     ("amenity", {"pharmacy"}, "health", "Pharmacy", "💊"),
+    ("shop", {"chemist"}, "health", "Chemist", "💊"),
     ("healthcare", {"*"}, "health", "Healthcare", "⚕️"),
     # Food / groceries
     ("amenity", {"restaurant"}, "food", "Restaurant", "🍽️"),
@@ -64,10 +124,12 @@ _TAG_RULES: list[tuple[str, set[str], str, str, str]] = [
     ("amenity", {"fast_food"}, "food", "Fast food", "🍔"),
     ("amenity", {"bar", "pub", "biergarten"}, "food", "Bar / Pub", "🍺"),
     ("amenity", {"food_court"}, "food", "Food court", "🍱"),
+    ("amenity", {"ice_cream"}, "food", "Ice cream", "🍦"),
     ("shop", {"supermarket"}, "food", "Supermarket", "🛒"),
     ("shop", {"convenience"}, "food", "Convenience store", "🏪"),
     ("shop", {"bakery"}, "food", "Bakery", "🥖"),
-    ("shop", {"butcher", "greengrocer", "seafood"}, "food", "Grocery", "🥗"),
+    ("shop", {"butcher", "greengrocer", "seafood", "deli"}, "food", "Grocery", "🥗"),
+    ("shop", {"marketplace"}, "food", "Marketplace", "🧺"),
     # Finance
     ("amenity", {"bank"}, "finance", "Bank", "🏦"),
     ("amenity", {"atm"}, "finance", "ATM", "🏧"),
@@ -77,7 +139,12 @@ _TAG_RULES: list[tuple[str, set[str], str, str, str]] = [
     ("amenity", {"bus_station"}, "transport", "Bus station", "🚌"),
     ("amenity", {"fuel"}, "transport", "Fuel station", "⛽"),
     ("amenity", {"charging_station"}, "transport", "EV charging", "🔌"),
-    ("railway", {"station", "subway_entrance"}, "transport", "Train station", "🚆"),
+    ("amenity", {"car_rental"}, "transport", "Car rental", "🚗"),
+    ("amenity", {"parking"}, "transport", "Parking", "🅿️"),
+    ("amenity", {"bicycle_rental"}, "transport", "Bike rental", "🚲"),
+    ("public_transport", {"station"}, "transport", "Transit station", "🚉"),
+    ("railway", {"station", "subway_entrance", "tram_stop"}, "transport", "Train station", "🚆"),
+    ("highway", {"bus_stop"}, "transport", "Bus stop", "🚏"),
     # Education
     ("amenity", {"school"}, "education", "School", "🏫"),
     ("amenity", {"college", "university"}, "education", "University", "🎓"),
@@ -86,15 +153,38 @@ _TAG_RULES: list[tuple[str, set[str], str, str, str]] = [
     # Municipal
     ("amenity", {"townhall", "courthouse"}, "municipal", "Municipal office", "🏛️"),
     ("amenity", {"post_office"}, "municipal", "Post office", "📮"),
-    ("office", {"government"}, "municipal", "Government office", "🏛️"),
+    ("office", {"government", "notary"}, "municipal", "Government office", "🏛️"),
+    # Utilities
+    ("amenity", {"recycling"}, "utilities", "Recycling", "♻️"),
+    ("amenity", {"waste_disposal"}, "utilities", "Waste disposal", "🗑️"),
+    ("office", {"telecommunication"}, "utilities", "Telecom office", "📡"),
+    ("office", {"energy_supplier"}, "utilities", "Energy office", "⚡"),
+    ("office", {"water_supplier"}, "utilities", "Water office", "🚰"),
+    ("man_made", {"water_works"}, "utilities", "Water works", "🚰"),
+    ("man_made", {"wastewater_plant"}, "utilities", "Wastewater plant", "💧"),
+    ("power", {"substation"}, "utilities", "Power substation", "⚡"),
     # Leisure
     ("amenity", {"cinema"}, "leisure", "Cinema", "🎬"),
     ("amenity", {"theatre"}, "leisure", "Theatre", "🎭"),
     ("amenity", {"nightclub"}, "leisure", "Nightclub", "🎶"),
+    ("amenity", {"arts_centre", "community_centre"}, "leisure", "Community", "🎨"),
     ("leisure", {"park"}, "leisure", "Park", "🌳"),
     ("leisure", {"fitness_centre", "sports_centre"}, "leisure", "Gym", "🏋️"),
+    ("leisure", {"playground"}, "leisure", "Playground", "🛝"),
+    ("leisure", {"stadium"}, "leisure", "Stadium", "🏟️"),
+    ("leisure", {"swimming_pool"}, "leisure", "Swimming pool", "🏊"),
+    ("tourism", {"museum"}, "leisure", "Museum", "🏛️"),
+    ("tourism", {"gallery"}, "leisure", "Gallery", "🖼️"),
+    ("tourism", {"attraction", "viewpoint"}, "leisure", "Attraction", "📍"),
+    ("tourism", {"zoo"}, "leisure", "Zoo", "🦁"),
     # Home / trades
     ("shop", {"hardware", "doityourself", "electrical"}, "home", "Hardware shop", "🛠️"),
+    ("shop", {"furniture", "appliance", "garden_centre"}, "home", "Home shop", "🛋️"),
+    ("craft", {"plumber"}, "home", "Plumber", "🔧"),
+    ("craft", {"electrician"}, "home", "Electrician", "💡"),
+    ("craft", {"carpenter"}, "home", "Carpenter", "🪚"),
+    ("craft", {"painter"}, "home", "Painter", "🎨"),
+    ("craft", {"locksmith"}, "home", "Locksmith", "🔐"),
 ]
 
 
@@ -109,32 +199,39 @@ def _match_category(tags: dict[str, str]) -> tuple[str, str, str] | None:
     return None
 
 
-def _round_key(lat: float, lng: float, radius_m: int) -> tuple[float, float, int]:
+def _round_key(
+    lat: float, lng: float, radius_m: int, category_slug: str | None
+) -> tuple[float, float, int, str]:
     """Round to ~1km precision so nearby callers share a cache entry."""
-    return (round(lat, 2), round(lng, 2), radius_m)
+    return (round(lat, 2), round(lng, 2), radius_m, category_slug or "")
 
 
-def _build_query(lat: float, lng: float, radius_m: int) -> str:
-    """Single Overpass QL query that returns all POI kinds we care about."""
-    selectors = [
-        'node["amenity"~"^(police|fire_station|hospital|clinic|doctors|dentist|pharmacy|'
-        "restaurant|cafe|fast_food|bar|pub|biergarten|food_court|bank|atm|"
-        "bureau_de_change|taxi|bus_station|fuel|charging_station|school|college|"
-        'university|library|kindergarten|townhall|courthouse|post_office|cinema|theatre|nightclub)$"]',
-        'node["shop"~"^(supermarket|convenience|bakery|butcher|greengrocer|seafood|hardware|'
-        'doityourself|electrical)$"]',
-        'node["healthcare"]',
-        'node["office"="government"]',
-        'node["railway"~"^(station|subway_entrance)$"]',
-        'node["leisure"~"^(park|fitness_centre|sports_centre)$"]',
-    ]
+def _build_query(
+    lat: float, lng: float, radius_m: int, category_slug: str | None
+) -> str:
+    """Build an Overpass QL query.
+
+    If `category_slug` is one of our known categories, emit a narrowed query
+    for only that category's OSM selectors (so we don't spend the 300-element
+    budget on unrelated POIs). Otherwise emit the full broad query.
+
+    All selectors use `nwr` so polygon POIs (hospitals, universities, parks
+    mapped as ways/relations) are also returned. `out tags center` gives us a
+    single representative centroid even for area geometry.
+    """
     bbox = f"(around:{radius_m},{lat},{lng})"
-    body = ";\n  ".join(s + bbox for s in selectors)
+    if category_slug and category_slug in _CATEGORY_SELECTORS:
+        sel_templates = _CATEGORY_SELECTORS[category_slug]
+    else:
+        # No filter (or unknown slug) → union of every category.
+        sel_templates = [s for selectors in _CATEGORY_SELECTORS.values() for s in selectors]
+    selectors = [f"nwr{tmpl}{bbox}" for tmpl in sel_templates]
+    body = ";\n  ".join(selectors)
     return f"""[out:json][timeout:25];
 (
   {body};
 );
-out tags center 200;
+out tags center {_OUT_LIMIT};
 """
 
 
@@ -184,8 +281,10 @@ def _parse_element(
     )
 
 
-async def _fetch_overpass(lat: float, lng: float, radius_m: int) -> list[OsmPlace]:
-    query = _build_query(lat, lng, radius_m)
+async def _fetch_overpass(
+    lat: float, lng: float, radius_m: int, category_slug: str | None
+) -> list[OsmPlace]:
+    query = _build_query(lat, lng, radius_m, category_slug)
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
             OVERPASS_URL,
@@ -209,12 +308,18 @@ async def nearby_places(
     lat: float,
     lng: float,
     radius_m: int = 3000,
+    category_slug: str | None = None,
 ) -> list[OsmPlace]:
     """Return OSM POIs around (lat, lng) within radius_m, cached for 10 min.
 
+    When `category_slug` is a known slug, the upstream Overpass query is
+    narrowed so the whole result budget is spent on just that category. The
+    cache key includes the slug so narrow and broad queries don't evict
+    each other.
+
     Raises on upstream failure so callers can decide whether to degrade.
     """
-    key = _round_key(lat, lng, radius_m)
+    key = _round_key(lat, lng, radius_m, category_slug)
     now = time.monotonic()
 
     async with _cache_lock:
@@ -222,7 +327,7 @@ async def nearby_places(
         if cached and cached[0] > now:
             return cached[1]
 
-    places = await _fetch_overpass(lat, lng, radius_m)
+    places = await _fetch_overpass(lat, lng, radius_m, category_slug)
 
     # Sort by distance for stable ordering.
     places.sort(key=lambda p: haversine_km(lat, lng, p.lat, p.lng))

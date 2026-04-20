@@ -6,6 +6,9 @@ export interface GeoResult {
   source: "browser" | "ip";
   city?: string | null;
   country?: string | null;
+  /** ISO 3166-1 alpha-2 country code, e.g. "TR" / "IR" / "US". Only set
+   *  when at least one geolocation source (typically IP) provided it. */
+  country_code?: string | null;
 }
 
 const GEO_CACHE_KEY = "sc_geo";
@@ -76,6 +79,7 @@ export async function askIpLocation(): Promise<GeoResult | null> {
         longitude?: number;
         city?: string;
         country_name?: string;
+        country_code?: string;
       };
       if (
         typeof data.latitude === "number" &&
@@ -87,6 +91,7 @@ export async function askIpLocation(): Promise<GeoResult | null> {
           source: "ip",
           city: data.city ?? null,
           country: data.country_name ?? null,
+          country_code: data.country_code?.toUpperCase() ?? null,
         };
       }
     }
@@ -96,7 +101,7 @@ export async function askIpLocation(): Promise<GeoResult | null> {
 
   try {
     const res = await fetch(
-      "https://ip-api.com/json/?fields=status,lat,lon,city,country",
+      "https://ip-api.com/json/?fields=status,lat,lon,city,country,countryCode",
       { headers: { Accept: "application/json" } },
     );
     if (res.ok) {
@@ -106,6 +111,7 @@ export async function askIpLocation(): Promise<GeoResult | null> {
         lon?: number;
         city?: string;
         country?: string;
+        countryCode?: string;
       };
       if (
         data.status === "success" &&
@@ -118,6 +124,7 @@ export async function askIpLocation(): Promise<GeoResult | null> {
           source: "ip",
           city: data.city ?? null,
           country: data.country ?? null,
+          country_code: data.countryCode?.toUpperCase() ?? null,
         };
       }
     }
@@ -129,6 +136,11 @@ export async function askIpLocation(): Promise<GeoResult | null> {
 
 /**
  * Best-effort location: cached → browser → ip. `preferFresh` skips cache.
+ *
+ * When browser GPS succeeds we still issue an IP lookup in the background to
+ * enrich the result with country/city metadata (the browser Geolocation API
+ * returns only raw coordinates, no country name). That lets downstream code
+ * auto-select a UI language based on the user's country.
  */
 export async function resolveLocation(opts?: {
   preferFresh?: boolean;
@@ -140,14 +152,26 @@ export async function resolveLocation(opts?: {
     const cached = cacheRead();
     if (cached) return cached;
   }
+
+  // Fire the IP lookup concurrently with the (potentially slow) browser
+  // permission prompt. We await it lazily so we don't delay the happy path.
+  const ipPromise = askIpLocation().catch(() => null);
+
   if (allowBrowser) {
     const b = await askBrowserLocation();
     if (b) {
-      cacheWrite(b);
-      return b;
+      const ip = await ipPromise;
+      const merged: GeoResult = {
+        ...b,
+        city: ip?.city ?? b.city ?? null,
+        country: ip?.country ?? b.country ?? null,
+        country_code: ip?.country_code ?? b.country_code ?? null,
+      };
+      cacheWrite(merged);
+      return merged;
     }
   }
-  const ip = await askIpLocation();
+  const ip = await ipPromise;
   if (ip) {
     cacheWrite(ip);
     return ip;

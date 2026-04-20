@@ -116,6 +116,12 @@ function ThemeSwitcher() {
           <DropdownMenuItem onSelect={() => setLocale("fa")}>
             <Globe2 className="h-4 w-4" /> فارسی {locale === "fa" && "✓"}
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setLocale("tr")}>
+            <Globe2 className="h-4 w-4" /> Türkçe {locale === "tr" && "✓"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setLocale("ar")}>
+            <Globe2 className="h-4 w-4" /> العربية {locale === "ar" && "✓"}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
