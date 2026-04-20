@@ -57,7 +57,7 @@ export default function CitizenHome() {
   const { t, locale } = useI18n();
 
   const [categories, setCategories] = useState<Category[]>([]);
-  const [businesses, setBusinesses] = useState<NearbyPlace[]>([]);
+  const [rawPlaces, setRawPlaces] = useState<NearbyPlace[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string>("");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,7 +68,7 @@ export default function CitizenHome() {
 
   const loadBusinesses = useCallback(async () => {
     if (!user || user.lat == null || user.lng == null) {
-      setBusinesses([]);
+      setRawPlaces([]);
       return;
     }
     setLoading(true);
@@ -78,18 +78,10 @@ export default function CitizenHome() {
       params.set("lng", String(user.lng));
       params.set("radius_m", "3000");
       if (selectedSlug) params.set("category_slug", selectedSlug);
-      let data = await api.get<NearbyPlace[]>(
+      const data = await api.get<NearbyPlace[]>(
         `/api/places/nearby?${params.toString()}`,
       );
-      const needle = q.trim().toLowerCase();
-      if (needle) {
-        data = data.filter(
-          (p) =>
-            p.name.toLowerCase().includes(needle) ||
-            (p.address ?? "").toLowerCase().includes(needle),
-        );
-      }
-      setBusinesses(data);
+      setRawPlaces(data);
     } catch (err) {
       toast({
         variant: "destructive",
@@ -99,7 +91,20 @@ export default function CitizenHome() {
     } finally {
       setLoading(false);
     }
-  }, [selectedSlug, q, toast, user]);
+  }, [selectedSlug, toast, user]);
+
+  // Search is a pure client-side filter over the fetched OSM results, so
+  // typing never refetches from Overpass (keeps us well under its rate
+  // limit and avoids skeleton flashes on each keystroke).
+  const businesses = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return rawPlaces;
+    return rawPlaces.filter(
+      (p) =>
+        p.name.toLowerCase().includes(needle) ||
+        (p.address ?? "").toLowerCase().includes(needle),
+    );
+  }, [rawPlaces, q]);
 
   useEffect(() => {
     if (!ready) return;
