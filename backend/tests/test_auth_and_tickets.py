@@ -22,7 +22,7 @@ def _auth(token: str) -> dict[str, str]:
 
 
 def test_healthcheck(client: TestClient) -> None:
-    assert client.get("/health").json() == {"status": "ok"}
+    assert client.get("/api/health").json() == {"status": "ok"}
 
 
 def test_auth_flow_and_roles(client: TestClient) -> None:

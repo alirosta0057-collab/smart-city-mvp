@@ -36,7 +36,7 @@ export default function AdminTicketsPage() {
               <tr key={t.id} className="border-t">
                 <td className="px-3 py-2">
                   <Link
-                    href={`/admin/tickets/${t.id}`}
+                    href={`/admin/tickets/chat?id=${t.id}`}
                     className="text-brand-700 hover:underline"
                   >
                     #{t.id}

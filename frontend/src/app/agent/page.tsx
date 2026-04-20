@@ -116,7 +116,7 @@ export default function AgentHome() {
             >
               <div>
                 <Link
-                  href={`/agent/tickets/${t.id}`}
+                  href={`/agent/tickets/chat?id=${t.id}`}
                   className="font-medium text-brand-700"
                 >
                   #{t.id} · {t.subject}
@@ -126,7 +126,7 @@ export default function AgentHome() {
                 </div>
               </div>
               <Link
-                href={`/agent/tickets/${t.id}`}
+                href={`/agent/tickets/chat?id=${t.id}`}
                 className="rounded border px-3 py-1 text-sm hover:bg-slate-100"
               >
                 Open chat

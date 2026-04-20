@@ -1,18 +1,27 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChatRoom } from "@/components/ChatRoom";
 import { useRequireAuth } from "@/lib/auth";
 
-export default function AdminChatPage() {
+function Inner() {
   const { ready } = useRequireAuth("admin");
-  const params = useParams<{ id: string }>();
-  const ticketId = Number(params?.id);
+  const params = useSearchParams();
+  const ticketId = Number(params?.get("id") ?? "");
 
   if (!ready || !ticketId) return null;
   return (
     <div className="mx-auto max-w-3xl">
       <ChatRoom ticketId={ticketId} selfKind="admin" canSend={false} />
     </div>
+  );
+}
+
+export default function AdminChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <Inner />
+    </Suspense>
   );
 }

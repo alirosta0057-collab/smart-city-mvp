@@ -29,7 +29,7 @@ export default function AgentActivePage() {
           >
             <div>
               <Link
-                href={`/agent/tickets/${t.id}`}
+                href={`/agent/tickets/chat?id=${t.id}`}
                 className="font-medium text-brand-700"
               >
                 #{t.id} · {t.subject}
