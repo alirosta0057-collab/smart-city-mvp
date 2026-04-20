@@ -1,16 +1,16 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { ChatRoom } from "@/components/ChatRoom";
 import { api } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 
-export default function AgentChatPage() {
+function Inner() {
   const { ready } = useRequireAuth("agent");
-  const params = useParams<{ id: string }>();
+  const params = useSearchParams();
   const router = useRouter();
-  const ticketId = Number(params?.id);
+  const ticketId = Number(params?.get("id") ?? "");
   const [resolving, setResolving] = useState(false);
 
   async function resolve() {
@@ -37,5 +37,13 @@ export default function AgentChatPage() {
       </div>
       <ChatRoom ticketId={ticketId} selfKind="agent" />
     </div>
+  );
+}
+
+export default function AgentChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <Inner />
+    </Suspense>
   );
 }

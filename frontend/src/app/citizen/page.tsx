@@ -62,7 +62,7 @@ export default function CitizenHome() {
       lat: user?.lat ?? null,
       lng: user?.lng ?? null,
     });
-    router.push(`/citizen/tickets/${ticket.id}`);
+    router.push(`/citizen/tickets/chat?id=${ticket.id}`);
   }
 
   async function openTicket(category: Category) {
@@ -84,7 +84,7 @@ export default function CitizenHome() {
       lat: user?.lat ?? null,
       lng: user?.lng ?? null,
     });
-    router.push(`/citizen/tickets/${ticket.id}`);
+    router.push(`/citizen/tickets/chat?id=${ticket.id}`);
   }
 
   const locationLabel = useMemo(() => {

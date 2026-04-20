@@ -27,7 +27,7 @@ export default function CitizenTicketsPage() {
           >
             <div>
               <Link
-                href={`/citizen/tickets/${t.id}`}
+                href={`/citizen/tickets/chat?id=${t.id}`}
                 className="font-medium text-brand-700"
               >
                 #{t.id} · {t.subject}

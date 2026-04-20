@@ -6,8 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://smartcity:smartcity@localhost:5432/smartcity"
-    redis_url: str = "redis://localhost:6379/0"
+    # Default to an on-disk SQLite DB so the backend can run standalone on
+    # hosts without a managed Postgres (Fly.io volumes, local quickstart, CI).
+    # In docker-compose this is overridden to Postgres via the env var.
+    database_url: str = "sqlite:///./data/smartcity.db"
+    # Redis is optional — the WebSocket chat hub is in-process, so an empty
+    # URL disables the Redis client entirely (single-instance deployments
+    # don't need pub/sub).
+    redis_url: str = ""
 
     jwt_secret: str = "dev-secret-change-me"
     jwt_algorithm: str = "HS256"
