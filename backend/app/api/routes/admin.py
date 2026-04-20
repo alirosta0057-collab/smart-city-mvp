@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
@@ -66,7 +66,7 @@ def stats(db: DbSession) -> dict[str, int | dict[str, int]]:
 @router.get("/analytics")
 def analytics(db: DbSession) -> dict[str, object]:
     """Aggregated time-series + category breakdown for the admin charts."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start = (now - timedelta(days=13)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
