@@ -2,22 +2,17 @@ services:
   - type: web
     name: smart-city
     runtime: docker
-    plan: starter
+    plan: free
     region: frankfurt
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./backend/Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
     autoDeploy: true
-    disk:
-      name: smartcity-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: DATABASE_URL
-        value: sqlite:////data/app.db
+        value: sqlite:////tmp/app.db
       - key: CORS_ORIGINS
         value: "*"
       - key: JWT_SECRET
