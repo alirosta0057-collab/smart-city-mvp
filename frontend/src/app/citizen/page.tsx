@@ -141,8 +141,12 @@ export default function CitizenHome() {
         city: geo.city,
         country: geo.country,
       });
+      // refresh() updates `user` with the new lat/lng, which recreates the
+      // `loadBusinesses` callback (user is in its deps) and re-runs the
+      // effect at the top of the component. We don't call loadBusinesses
+      // directly here, because that closure still holds the *old* user and
+      // would race with the effect-driven refetch against the new coords.
       await refresh();
-      await loadBusinesses();
       if (!silent) {
         toast({
           variant: "success",
