@@ -50,6 +50,25 @@ export interface Business {
   distance_km: number;
 }
 
+export interface NearbyPlaceCategory {
+  slug: string;
+  name: string;
+  icon: string;
+}
+
+export interface NearbyPlace {
+  id: string;
+  name: string;
+  description: string | null;
+  phone: string | null;
+  address: string | null;
+  website: string | null;
+  lat: number;
+  lng: number;
+  category: NearbyPlaceCategory;
+  distance_km: number;
+}
+
 export type TicketStatus =
   | "open"
   | "queued"

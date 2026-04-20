@@ -16,7 +16,7 @@ import {
   SquareArrowOutUpRight,
   Store,
 } from "lucide-react";
-import { api, Business, Category, Ticket } from "@/lib/api";
+import { api, Category, NearbyPlace, Ticket } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/lib/auth";
 import { resolveLocation } from "@/lib/geo";
 import { useI18n } from "@/lib/i18n";
@@ -57,7 +57,7 @@ export default function CitizenHome() {
   const { t, locale } = useI18n();
 
   const [categories, setCategories] = useState<Category[]>([]);
-  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [businesses, setBusinesses] = useState<NearbyPlace[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string>("");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -67,25 +67,39 @@ export default function CitizenHome() {
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
 
   const loadBusinesses = useCallback(async () => {
+    if (!user || user.lat == null || user.lng == null) {
+      setBusinesses([]);
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("lat", String(user.lat));
+      params.set("lng", String(user.lng));
+      params.set("radius_m", "3000");
       if (selectedSlug) params.set("category_slug", selectedSlug);
-      if (q.trim()) params.set("q", q.trim());
-      const data = await api.get<Business[]>(
-        `/api/businesses?${params.toString()}`,
+      let data = await api.get<NearbyPlace[]>(
+        `/api/places/nearby?${params.toString()}`,
       );
+      const needle = q.trim().toLowerCase();
+      if (needle) {
+        data = data.filter(
+          (p) =>
+            p.name.toLowerCase().includes(needle) ||
+            (p.address ?? "").toLowerCase().includes(needle),
+        );
+      }
       setBusinesses(data);
     } catch (err) {
       toast({
         variant: "destructive",
-        title: "Failed to load businesses",
+        title: "Failed to load nearby places",
         description: err instanceof Error ? err.message : "Please try again",
       });
     } finally {
       setLoading(false);
     }
-  }, [selectedSlug, q, toast]);
+  }, [selectedSlug, q, toast, user]);
 
   useEffect(() => {
     if (!ready) return;
@@ -204,6 +218,7 @@ export default function CitizenHome() {
       })),
     [businesses],
   );
+
 
   const greeting = useMemo(() => {
     if (!user) return "";
@@ -407,7 +422,8 @@ export default function CitizenHome() {
               height="440px"
               rounded
               onMarkerClick={(id) => {
-                const el = document.getElementById(`biz-${id}`);
+                const safe = String(id).replace(/[^a-z0-9]/gi, "_");
+                const el = document.getElementById(`biz-${safe}`);
                 if (el) {
                   el.scrollIntoView({ behavior: "smooth", block: "center" });
                   el.classList.add("ring-2", "ring-primary");
@@ -509,10 +525,10 @@ function CategoryTile({
   );
 }
 
-function BusinessCard({ biz }: { biz: Business }) {
+function BusinessCard({ biz }: { biz: NearbyPlace }) {
   return (
     <li
-      id={`biz-${biz.id}`}
+      id={`biz-${String(biz.id).replace(/[^a-z0-9]/gi, "_")}`}
       className="group rounded-xl border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">

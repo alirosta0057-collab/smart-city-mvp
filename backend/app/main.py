@@ -6,7 +6,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import admin, auth, businesses, categories, chat_ws, tickets, users
+from app.api.routes import (
+    admin,
+    auth,
+    businesses,
+    categories,
+    chat_ws,
+    places,
+    tickets,
+    users,
+)
 from app.core.config import settings
 from app.core.db import Base, engine
 
@@ -24,6 +33,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(categories.router)
 app.include_router(businesses.router)
+app.include_router(places.router)
 app.include_router(tickets.router)
 app.include_router(admin.router)
 app.include_router(chat_ws.router)

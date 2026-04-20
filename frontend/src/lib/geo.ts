@@ -60,11 +60,12 @@ export function askBrowserLocation(timeoutMs = 6000): Promise<GeoResult | null> 
 }
 
 /**
- * Ask ipapi.co (CORS-enabled, no key required for low volume).
- * Falls back to Tehran if the service is unreachable, so the demo still works
- * offline / behind restrictive networks.
+ * Ask ipapi.co (CORS-enabled, no key required for low volume). If ipapi.co
+ * is unreachable, tries ip-api.com as a secondary source. Returns `null` on
+ * complete failure — callers must handle that instead of falling back to a
+ * hard-coded location, so we never show the user a wrong city.
  */
-export async function askIpLocation(): Promise<GeoResult> {
+export async function askIpLocation(): Promise<GeoResult | null> {
   try {
     const res = await fetch("https://ipapi.co/json/", {
       headers: { Accept: "application/json" },
@@ -90,15 +91,40 @@ export async function askIpLocation(): Promise<GeoResult> {
       }
     }
   } catch {
+    /* fall through to secondary */
+  }
+
+  try {
+    const res = await fetch(
+      "https://ip-api.com/json/?fields=status,lat,lon,city,country",
+      { headers: { Accept: "application/json" } },
+    );
+    if (res.ok) {
+      const data = (await res.json()) as {
+        status?: string;
+        lat?: number;
+        lon?: number;
+        city?: string;
+        country?: string;
+      };
+      if (
+        data.status === "success" &&
+        typeof data.lat === "number" &&
+        typeof data.lon === "number"
+      ) {
+        return {
+          lat: data.lat,
+          lng: data.lon,
+          source: "ip",
+          city: data.city ?? null,
+          country: data.country ?? null,
+        };
+      }
+    }
+  } catch {
     /* ignore */
   }
-  return {
-    lat: 35.6892,
-    lng: 51.389,
-    source: "ip",
-    city: "Tehran",
-    country: "Iran",
-  };
+  return null;
 }
 
 /**
@@ -122,6 +148,11 @@ export async function resolveLocation(opts?: {
     }
   }
   const ip = await askIpLocation();
-  cacheWrite(ip);
-  return ip;
+  if (ip) {
+    cacheWrite(ip);
+    return ip;
+  }
+  throw new Error(
+    "Could not determine your location. Please enable location access in your browser and try again.",
+  );
 }
