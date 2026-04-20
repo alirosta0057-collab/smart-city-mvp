@@ -40,8 +40,11 @@ BUSINESSES = [
 
 
 USERS = [
+    # Citizen demo has no pre-seeded coords — the dashboard resolves real
+    # geolocation on first mount so demo users everywhere see their actual
+    # neighbourhood, not whatever the last person who logged in saw.
     ("admin@smartcity.example", "Admin", "admin123", UserRole.ADMIN, None, None),
-    ("citizen@smartcity.example", "Citizen Demo", "pass123", UserRole.CITIZEN, 35.6892, 51.3890),
+    ("citizen@smartcity.example", "Citizen Demo", "pass123", UserRole.CITIZEN, None, None),
     ("agent@smartcity.example", "Agent Demo", "pass123", UserRole.AGENT, 35.7000, 51.3900),
     ("agent2@smartcity.example", "Agent North", "pass123", UserRole.AGENT, 35.7700, 51.4100),
 ]
@@ -88,8 +91,8 @@ def seed() -> None:
                 role=role,
                 lat=lat,
                 lng=lng,
-                city="Tehran",
-                country="Iran",
+                city=None if lat is None else "Tehran",
+                country=None if lat is None else "Iran",
                 is_online=(role == UserRole.AGENT),
             )
             db.add(u)

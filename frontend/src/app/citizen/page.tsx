@@ -120,11 +120,14 @@ export default function CitizenHome() {
   }, [ready, loadBusinesses]);
 
   useEffect(() => {
-    // Auto-detect location on first visit if user has no stored lat/lng
+    // Re-resolve location on every dashboard mount so the map reflects the
+    // user's current physical location, not a stale value carried over from
+    // a previous login (including, in demos, a different person using the
+    // same shared account). If browser geolocation is allowed, Chrome caches
+    // the permission so this is silent after first grant; otherwise we fall
+    // through to IP lookup.
     if (!ready || !user) return;
-    if (user.lat == null || user.lng == null) {
-      void detectLocation(true);
-    }
+    void detectLocation(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, user?.id]);
 
@@ -138,8 +141,12 @@ export default function CitizenHome() {
         city: geo.city,
         country: geo.country,
       });
+      // refresh() updates `user` with the new lat/lng, which recreates the
+      // `loadBusinesses` callback (user is in its deps) and re-runs the
+      // effect at the top of the component. We don't call loadBusinesses
+      // directly here, because that closure still holds the *old* user and
+      // would race with the effect-driven refetch against the new coords.
       await refresh();
-      await loadBusinesses();
       if (!silent) {
         toast({
           variant: "success",
@@ -151,11 +158,13 @@ export default function CitizenHome() {
         });
       }
     } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Location failed",
-        description: err instanceof Error ? err.message : "Please try again",
-      });
+      if (!silent) {
+        toast({
+          variant: "destructive",
+          title: "Location failed",
+          description: err instanceof Error ? err.message : "Please try again",
+        });
+      }
     } finally {
       setLocating(false);
     }
