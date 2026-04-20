@@ -66,7 +66,9 @@ async def list_nearby_places(
         )
 
     try:
-        places = await nearby_places(origin_lat, origin_lng, radius_m)
+        places = await nearby_places(
+            origin_lat, origin_lng, radius_m, category_slug
+        )
     except Exception as exc:  # noqa: BLE001 — external service, report cleanly
         logger.warning("Overpass lookup failed: %s", exc)
         raise HTTPException(
@@ -76,6 +78,8 @@ async def list_nearby_places(
 
     results: list[NearbyPlace] = []
     for p in places:
+        # Defensive: upstream is already narrowed by category, but keep the
+        # post-filter for categories not covered by a dedicated selector.
         if category_slug and p.category_slug != category_slug:
             continue
         results.append(

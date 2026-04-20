@@ -326,7 +326,7 @@ function QueuedCard({
   now: Date;
   claiming: boolean;
   onClaim: () => void;
-  locale: "en" | "fa";
+  locale: ReturnType<typeof useI18n>["locale"];
   t: ReturnType<typeof useI18n>["t"];
 }) {
   const isSos = ticket.priority === "sos";
