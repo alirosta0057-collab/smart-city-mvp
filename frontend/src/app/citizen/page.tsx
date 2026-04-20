@@ -158,11 +158,13 @@ export default function CitizenHome() {
         });
       }
     } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Location failed",
-        description: err instanceof Error ? err.message : "Please try again",
-      });
+      if (!silent) {
+        toast({
+          variant: "destructive",
+          title: "Location failed",
+          description: err instanceof Error ? err.message : "Please try again",
+        });
+      }
     } finally {
       setLocating(false);
     }
