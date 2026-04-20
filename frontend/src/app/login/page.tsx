@@ -68,11 +68,11 @@ export default function LoginPage() {
           </Link>
         </p>
         <div className="rounded bg-slate-50 p-3 text-xs text-slate-600">
-          Demo: <code>citizen@smartcity.local</code> / <code>pass123</code>
+          Demo: <code>citizen@smartcity.example</code> / <code>pass123</code>
           <br />
-          <code>agent@smartcity.local</code> / <code>pass123</code>
+          <code>agent@smartcity.example</code> / <code>pass123</code>
           <br />
-          <code>admin@smartcity.local</code> / <code>admin123</code>
+          <code>admin@smartcity.example</code> / <code>admin123</code>
         </div>
       </form>
     </div>

@@ -40,10 +40,10 @@ BUSINESSES = [
 
 
 USERS = [
-    ("admin@smartcity.local", "Admin", "admin123", UserRole.ADMIN, None, None),
-    ("citizen@smartcity.local", "Citizen Demo", "pass123", UserRole.CITIZEN, 35.6892, 51.3890),
-    ("agent@smartcity.local", "Agent Demo", "pass123", UserRole.AGENT, 35.7000, 51.3900),
-    ("agent2@smartcity.local", "Agent North", "pass123", UserRole.AGENT, 35.7700, 51.4100),
+    ("admin@smartcity.example", "Admin", "admin123", UserRole.ADMIN, None, None),
+    ("citizen@smartcity.example", "Citizen Demo", "pass123", UserRole.CITIZEN, 35.6892, 51.3890),
+    ("agent@smartcity.example", "Agent Demo", "pass123", UserRole.AGENT, 35.7000, 51.3900),
+    ("agent2@smartcity.example", "Agent North", "pass123", UserRole.AGENT, 35.7700, 51.4100),
 ]
 
 

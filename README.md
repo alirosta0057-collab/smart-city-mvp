@@ -65,9 +65,9 @@ docker compose exec backend python -m app.seed
 
 | Role    | Email                   | Password |
 | ------- | ----------------------- | -------- |
-| admin   | admin@smartcity.local   | admin123 |
-| citizen | citizen@smartcity.local | pass123  |
-| agent   | agent@smartcity.local   | pass123  |
+| admin   | admin@smartcity.example   | admin123 |
+| citizen | citizen@smartcity.example | pass123  |
+| agent   | agent@smartcity.example   | pass123  |
 
 ## Environment variables
 
