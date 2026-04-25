@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AlertCircle, ArrowRight, LogIn, Sparkles } from "lucide-react";
 import { useAuth, homeForRole } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import {
   Card,
   CardContent,
@@ -18,29 +19,29 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toaster";
 
-const DEMO = [
-  {
-    role: "Citizen",
-    email: "citizen@smartcity.example",
-    pass: "pass123",
-    tint: "bg-primary/10 text-primary",
-  },
-  {
-    role: "Agent",
-    email: "agent@smartcity.example",
-    pass: "pass123",
-    tint: "bg-success/10 text-success",
-  },
-  {
-    role: "Admin",
-    email: "admin@smartcity.example",
-    pass: "admin123",
-    tint: "bg-warning/15 text-warning",
-  },
-];
-
 function LoginInner() {
   const { login } = useAuth();
+  const { t } = useI18n();
+  const DEMO = [
+    {
+      role: t("home.role_citizens"),
+      email: "citizen@smartcity.example",
+      pass: "pass123",
+      tint: "bg-primary/10 text-primary",
+    },
+    {
+      role: t("home.role_agents"),
+      email: "agent@smartcity.example",
+      pass: "pass123",
+      tint: "bg-success/10 text-success",
+    },
+    {
+      role: t("home.role_admin"),
+      email: "admin@smartcity.example",
+      pass: "admin123",
+      tint: "bg-warning/15 text-warning",
+    },
+  ];
   const router = useRouter();
   const params = useSearchParams();
   const prefillEmail = params?.get("email") ?? "";
@@ -62,14 +63,14 @@ function LoginInner() {
       const u = await login(email, password);
       toast({
         variant: "success",
-        title: `Welcome, ${u.full_name}`,
-        description: `Signed in as ${u.role}.`,
+        title: `${t("login.welcome")} ${u.full_name}`,
+        description: `${t("login.signed_in_as")} ${u.role}.`,
       });
       router.replace(homeForRole(u.role));
     } catch (err) {
-      const msg = err instanceof ApiError ? err.detail : "Login failed";
+      const msg = err instanceof ApiError ? err.detail : t("login.failed");
       setError(msg);
-      toast({ variant: "destructive", title: "Login failed", description: msg });
+      toast({ variant: "destructive", title: t("login.failed"), description: msg });
     } finally {
       setLoading(false);
     }
@@ -86,15 +87,12 @@ function LoginInner() {
       <div className="hidden space-y-6 md:block">
         <div className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span className="font-medium">Smart City control center</span>
+          <span className="font-medium">{t("login.control_center")}</span>
         </div>
         <h1 className="text-3xl font-bold tracking-tight lg:text-4xl">
-          Welcome back.
+          {t("login.welcome_back")}
         </h1>
-        <p className="text-muted-foreground">
-          Sign in to your portal. Citizens manage tickets, agents work the
-          queue, admins oversee the city.
-        </p>
+        <p className="text-muted-foreground">{t("login.portal_desc")}</p>
         <div className="space-y-2">
           {DEMO.map((d) => (
             <button
@@ -124,16 +122,14 @@ function LoginInner() {
       <Card className="border-border/60 shadow-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-2xl">
-            <LogIn className="h-5 w-5" /> Log in
+            <LogIn className="h-5 w-5" /> {t("login.title")}
           </CardTitle>
-          <CardDescription>
-            Use one of the demo accounts on the left, or sign in with your own.
-          </CardDescription>
+          <CardDescription>{t("login.card_desc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("login.email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -145,7 +141,7 @@ function LoginInner() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("login.password")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -169,12 +165,12 @@ function LoginInner() {
               size="lg"
               className="w-full"
             >
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? t("login.submitting") : t("login.submit")}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              New here?{" "}
+              {t("login.new_here")}{" "}
               <Link className="font-medium text-primary hover:underline" href="/register">
-                Create an account
+                {t("login.create_link")}
               </Link>
             </p>
           </form>
